@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Sentinel Honeypot{% endblock %}
+
+{% block content %}
+<div class="analytics">
+    <h2>Security Analytics</h2>
+    
+    <!-- Export Buttons -->
+    <div style="margin-bottom: 20px;">
+        <a href="/api/export/json" class="btn btn-primary" style="margin-right: 10px;">Export JSON</a>
+        <a href="/api/export/csv" class="btn btn-success">Export CSV</a>
+    </div>
+    
+    <div class="analytics-grid">
+        <div class="chart-box">
+            <h3>Attacks by Port</h3>
+            <canvas id="portChart"></canvas>
+        </div>
+        
+        <div class="chart-box">
+            <h3>Attack Types</h3>
+            <canvas id="typeChart"></canvas>
+        </div>
+        
+        <div class="chart-box">
+            <h3>Severity Distribution</h3>
+            <canvas id="severityChart"></canvas>
+        </div>
+        
+        <div class="chart-box">
+            <h3>Top Attackers</h3>
+            <div id="topAttackers" class="list-container">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="network-scanner">
+        <h3>Network Scanner</h3>
+        <div class="scanner-controls">
+            <input type="text" id="scanTarget" placeholder="Enter IP (e.g., 192.168.1.1)" value="127.0.0.1">
+            <button id="scanBtn" class="btn btn-primary">Scan</button>
+        </div>
+        <div id="scanResults" class="results-container">
+            <p>Enter a target and click Scan</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Port Chart
+const portCtx = document.getElementById('portChart').getContext('2d');
+const portChart = new Chart(portCtx, {
+    type: 'bar',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Attacks',
+            data: [],
+            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40', '#c9cbcf']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: { beginAtZero: true, ticks: { color: '#e0e0e0' } },
+            x: { ticks: { color: '#e0e0e0' } }
+        },
+        plugins: { legend: { labels: { color: '#e0e0e0' } } }
+    }
+});
+
+// Type Chart
+const typeCtx = document.getElementById('typeChart').getContext('2d');
+const typeChart = new Chart(typeCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [],
+        datasets: [{
+            data: [],
+            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { color: '#e0e0e0' } } }
+    }
+});
+
+// Severity Chart
+const severityCtx = document.getElementById('severityChart').getContext('2d');
+const severityChart = new Chart(severityCtx, {
+    type: 'pie',
+    data: {
+        labels: ['Low', 'Medium', 'High'],
+        datasets: [{
+            data: [0, 0, 0],
+            backgroundColor: ['#4bc0c0', '#ffce56', '#ff6384']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { color: '#e0e0e0' } } }
+    }
+});
+
+// Load and update charts
+function loadAnalytics() {
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            // Port chart
+            if (data.attacks_by_port && Object.keys(data.attacks_by_port).length > 0) {
+                portChart.data.labels = Object.keys(data.attacks_by_port);
+                portChart.data.datasets[0].data = Object.values(data.attacks_by_port);
+                portChart.update();
+            }
+            
+            // Type chart
+            if (data.attacks_by_type && Object.keys(data.attacks_by_type).length > 0) {
+                typeChart.data.labels = Object.keys(data.attacks_by_type);
+                typeChart.data.datasets[0].data = Object.values(data.attacks_by_type);
+                typeChart.update();
+            }
+            
+            // Severity chart
+            if (data.attacks_by_severity) {
+                severityChart.data.datasets[0].data = [
+                    data.attacks_by_severity.low || 0,
+                    data.attacks_by_severity.medium || 0,
+                    data.attacks_by_severity.high || 0
+                ];
+                severityChart.update();
+            }
+            
+            // Top attackers
+            if (data.top_attackers && data.top_attackers.length > 0) {
+                let html = '<ul style="list-style:none;padding:0;">';
+                data.top_attackers.forEach((a, i) => {
+                    html += `<li style="padding:8px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
+                        <span>${i+1}. ${a.ip}</span>
+                        <span style="color:#ff6384;font-weight:bold;">${a.count} attacks</span>
+                    </li>`;
+                });
+                html += '</ul>';
+                document.getElementById('topAttackers').innerHTML = html;
+            }
+        });
+}
+
+// Scanner
+document.getElementById('scanBtn').addEventListener('click', function() {
+    const target = document.getElementById('scanTarget').value;
+    const results = document.getElementById('scanResults');
+    
+    results.innerHTML = '<p style="color:#36a2eb;">Scanning...</p>';
+    this.disabled = true;
+    
+    fetch('/api/scan_network', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: target })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success' && data.results) {
+            let html = `<h4>Host: ${data.results.host || target}</h4>`;
+            if (data.results.open_ports && data.results.open_ports.length > 0) {
+                html += '<ul style="list-style:none;padding:0;">';
+                data.results.open_ports.forEach(p => {
+                    html += `<li style="padding:5px;color:#4bc0c0;">✓ Port ${p.port} (${p.service}) - OPEN</li>`;
+                });
+                html += '</ul>';
+            } else {
+                html += '<p>No open ports found</p>';
+            }
+            results.innerHTML = html;
+        } else {
+            results.innerHTML = `<p style="color:#ff6384;">Error: ${data.message || 'Scan failed'}</p>`;
+        }
+        this.disabled = false;
+    })
+    .catch(e => {
+        results.innerHTML = `<p style="color:#ff6384;">Error: ${e}</p>`;
+        this.disabled = false;
+    });
+});
+
+// Load every 5 seconds
+loadAnalytics();
+setInterval(loadAnalytics, 5000);
+</script>
+{% endblock %}
