@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sentinel Honeypot</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="shield-icon">🛡️</span>
+                <h1>SENTINEL</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="active">Dashboard</a></li>
+                <li><a href="/live" class="">Live Monitor</a></li>
+                <li><a href="/analytics" class="">Analytics</a></li>
+                <li><a href="/admin_portal" class="">Admin</a></li>
+            </ul>
+            <div style="display:flex;align-items:center;gap:10px">
+                <button id="themeToggle" title="Toggle theme" class="btn" style="padding:.4rem .6rem">🌗</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        
+<div class="dashboard">
+    <h2>Security Dashboard</h2>
+    
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <h3>Honeypot Control</h3>
+        <div class="controls">
+            <button id="startBtn" class="btn btn-success" onclick="fallbackStart()">Start Honeypot</button>
+            <button id="stopBtn" class="btn btn-danger" onclick="fallbackStop()">Stop Honeypot</button>
+            <button id="clearBtn" class="btn btn-warning" style="background:#ff9800;" onclick="fallbackClear()">Clear Stats</button>
+            <span id="status" class="status-badge">Stopped</span>
+        </div>
+    </div>
+    
+    <!-- Team Attack Info -->
+    <div class="attack-info-panel">
+        <div id="attackInfo" class="attack-hero-grid">
+            <div class="attack-hero-left">
+                <h3>🎯 Team Attack Guide</h3>
+                <div class="hero-row">
+                    <div>
+                        <h4>Target IP Address:</h4>
+                        <p id="targetIP" class="hero-ip">Loading...</p>
+                    </div>
+                    <div>
+                        <h4>Ports to Attack:</h4>
+                        <div id="portsList" class="hero-ports">
+                            <span class="port">2222</span>(SSH) | 
+                            <span class="port">2323</span>(Telnet) | 
+                            <span class="port">8000</span>(HTTP) | 
+                            <span class="port">8443</span>(HTTPS) | 
+                            <span class="port">33060</span>(MySQL) | 
+                            <span class="port">8080</span>(Proxy) |
+                            <span class="port">2121</span>(FTP)
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-commands">
+                    <h4>Quick Attack Commands:</h4>
+                    <div class="commands-row">
+                        <code id="attackCommands" class="commands-code">nmap -sV -p 2222,2323,8000,8443,33060,8080,2121 &lt;TARGET_IP&gt;
+telnet &lt;TARGET_IP&gt; 2323
+curl http://&lt;TARGET_IP&gt;:8000
+ssh root@&lt;TARGET_IP&gt; -p 2222
+nc &lt;TARGET_IP&gt; 2222</code>
+                        <button id="copyCommands" class="copy-btn" title="Copy commands">Copy</button>
+                    </div>
+                </div>
+            </div>
+            <div class="attack-hero-right" aria-hidden="true">
+                <!-- decorative honeycomb/illustration -->
+                <svg class="hero-illustration" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg" role="img">
+                    <defs>
+                        <linearGradient id="g1" x1="0" x2="1">
+                            <stop offset="0" stop-color="#ffd166"/>
+                            <stop offset="1" stop-color="#ff6b6b"/>
+                        </linearGradient>
+                    </defs>
+                    <g fill="url(#g1)" opacity="0.12">
+                        <rect x="10" y="10" width="60" height="40" rx="6" />
+                        <rect x="80" y="20" width="60" height="40" rx="6" />
+                        <rect x="150" y="10" width="60" height="40" rx="6" />
+                        <rect x="40" y="60" width="60" height="40" rx="6" />
+                        <rect x="110" y="60" width="60" height="40" rx="6" />
+                    </g>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-info">
+                <h4>Total Attacks</h4>
+                <p class="stat-value" id="totalAttacks">0</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🌐</div>
+            <div class="stat-info">
+                <h4>Unique IPs</h4>
+                <p class="stat-value" id="uniqueIps">0</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🔍</div>
+            <div class="stat-info">
+                <h4>Port Scans</h4>
+                <p class="stat-value" id="portScans">0</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-info">
+                <h4>Connections</h4>
+                <p class="stat-value" id="connections">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Attacks -->
+    <div class="recent-attacks">
+        <h3>Recent Attack Activity</h3>
+        <div class="table-container">
+            <table id="attacksTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Source IP</th>
+                        <th>Target Port</th>
+                        <th>Service</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody id="attacksBody">
+                    <tr class="no-data-row">
+                        <td colspan="5" data-label="Info">
+                            <div class="empty-illustration">
+                                <svg viewBox="0 0 64 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+                                    <rect x="2" y="8" width="60" height="32" rx="4" fill="rgba(0,217,255,0.06)" stroke="rgba(0,217,255,0.12)"/>
+                                    <circle cx="18" cy="24" r="4" fill="rgba(0,217,255,0.12)"/>
+                                    <rect x="30" y="18" width="22" height="2" fill="rgba(0,217,255,0.08)"/>
+                                    <rect x="30" y="22" width="16" height="2" fill="rgba(0,217,255,0.04)"/>
+                                </svg>
+                                <div>
+                                    <div style="font-weight:700;color:var(--muted);">No attack data yet</div>
+                                    <div class="small">The system is ready — generate traffic or open trap endpoints to see activity</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div id="attacksPager" class="pagination" aria-label="Attacks pagination"></div>
+        </div>
+    </div>
+
+    <!-- Attack Chart -->
+    <div class="chart-container">
+        <h3>Attack Timeline</h3>
+        <canvas id="attackChart"></canvas>
+    </div>
+</div>
+
+    </main>
+
+    <footer>
+        <p>Sentinel Honeypot System &copy; 2025 | Security Monitoring & Threat Detection</p>
+    </footer>
+
+    
+<script>
+// Inline fallbacks invoked only when dashboard JS didn't initialize.
+function fallbackStart(){
+    if(window.__dashboard_js_loaded) return;
+    if(!confirm('Start honeypot (fallback)?')) return;
+    fetch('/api/start_honeypot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+        .then(r=>r.json()).then(d=>alert(d.message||JSON.stringify(d))).catch(e=>alert('Error: '+e));
+}
+function fallbackStop(){
+    if(window.__dashboard_js_loaded) return;
+    if(!confirm('Stop honeypot (fallback)?')) return;
+    fetch('/api/stop_honeypot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+        .then(r=>r.json()).then(d=>alert(d.message||JSON.stringify(d))).catch(e=>alert('Error: '+e));
+}
+function fallbackClear(){
+    if(window.__dashboard_js_loaded) return;
+    if(!confirm('Clear stats (fallback)?')) return;
+    fetch('/api/clear_stats',{method:'POST',headers:{'Content-Type':'application/json'}})
+        .then(r=>r.json()).then(d=>alert(d.message||JSON.stringify(d))).catch(e=>alert('Error: '+e));
+}
+</script>
+<script src="/static/js/dashboard.js?v=2"></script>
+
+    <script>
+        // Theme toggle (persists in localStorage)
+        (function(){
+            const key = 'sentinel_theme';
+            const body = document.body;
+            function applyTheme(t){
+                if(t === 'light') body.classList.add('light-theme'); else body.classList.remove('light-theme');
+            }
+            let t = localStorage.getItem(key) || 'dark';
+            applyTheme(t);
+            const btn = document.getElementById('themeToggle');
+            if(btn){ btn.addEventListener('click', ()=>{
+                t = (t==='dark') ? 'light' : 'dark';
+                localStorage.setItem(key, t); applyTheme(t);
+            }) }
+        })();
+    </script>
+</html>
